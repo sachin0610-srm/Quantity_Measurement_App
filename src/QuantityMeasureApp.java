@@ -1,12 +1,19 @@
 import java.util.Objects;
 
+/**
+ * Main Class for Quantity Measurement Application
+ * Implements UC4: Extended Unit Support (Feet, Inches, Yards, Centimeters)
+ */
 public class QuantityMeasureApp {
 
-    enum LengthUnit {
-        FEET(1.0),
-        INCH(1.0 / 12.0);
+    public enum LengthUnit {
 
-        public final double conversionFactor;
+        INCHES(1.0),
+        FEET(12.0),
+        YARDS(36.0),
+        CENTIMETERS(0.393701);
+
+        private final double conversionFactor;
 
         LengthUnit(double conversionFactor) {
             this.conversionFactor = conversionFactor;
@@ -17,14 +24,13 @@ public class QuantityMeasureApp {
         }
     }
 
-    static class Quantity {
+    public static class QuantityLength {
         private final double value;
         private final LengthUnit unit;
 
-        public Quantity(double value, LengthUnit unit) {
-            if (unit == null) {
-                throw new IllegalArgumentException("Unit cannot be null");
-            }
+        public QuantityLength(Double value, LengthUnit unit) {
+            if (value == null) throw new IllegalArgumentException("Value cannot be null");
+            if (unit == null) throw new IllegalArgumentException("Unit cannot be null");
             this.value = value;
             this.unit = unit;
         }
@@ -32,15 +38,14 @@ public class QuantityMeasureApp {
         @Override
         public boolean equals(Object o) {
             if (this == o) return true;
-
             if (o == null || getClass() != o.getClass()) return false;
 
-            Quantity that = (Quantity) o;
+            QuantityLength that = (QuantityLength) o;
 
-            double valueInBase1 = this.unit.convertToBase(this.value);
-            double valueInBase2 = that.unit.convertToBase(that.value);
+            double baseValue1 = this.unit.convertToBase(this.value);
+            double baseValue2 = that.unit.convertToBase(that.value);
 
-            return Math.abs(valueInBase1 - valueInBase2) < 0.0001;
+            return Math.abs(baseValue1 - baseValue2) < 0.00001;
         }
 
         @Override
@@ -55,42 +60,23 @@ public class QuantityMeasureApp {
     }
 
     public static void main(String[] args) {
-        System.out.println("Running UC3: Generic Quantity Class Test Suite...\n");
+        System.out.println("--- UC4: Extended Unit Support Comparison Results ---");
 
-        test("Feet to Feet Same Value",
-                new Quantity(1.0, LengthUnit.FEET), new Quantity(1.0, LengthUnit.FEET), true);
+        compare(new QuantityLength(1.0, LengthUnit.YARDS), new QuantityLength(3.0, LengthUnit.FEET));
 
-        test("Inch to Inch Same Value",
-                new Quantity(1.0, LengthUnit.INCH), new Quantity(1.0, LengthUnit.INCH), true);
+        compare(new QuantityLength(1.0, LengthUnit.YARDS), new QuantityLength(36.0, LengthUnit.INCHES));
 
-        test("Feet to Inch Equivalent",
-                new Quantity(1.0, LengthUnit.FEET), new Quantity(12.0, LengthUnit.INCH), true);
+        compare(new QuantityLength(2.0, LengthUnit.YARDS), new QuantityLength(2.0, LengthUnit.YARDS));
 
-        test("Inch to Feet Equivalent (Symmetry)",
-                new Quantity(12.0, LengthUnit.INCH), new Quantity(1.0, LengthUnit.FEET), true);
+        compare(new QuantityLength(2.0, LengthUnit.CENTIMETERS), new QuantityLength(2.0, LengthUnit.CENTIMETERS));
 
-        test("Feet to Feet Different Value",
-                new Quantity(1.0, LengthUnit.FEET), new Quantity(2.0, LengthUnit.FEET), false);
+        compare(new QuantityLength(1.0, LengthUnit.CENTIMETERS), new QuantityLength(0.393701, LengthUnit.INCHES));
 
-        test("Inch to Inch Different Value",
-                new Quantity(1.0, LengthUnit.INCH), new Quantity(2.0, LengthUnit.INCH), false);
-
-        Quantity q = new Quantity(1.0, LengthUnit.FEET);
-        System.out.println("[Test] Same Reference: " + (q.equals(q) ? "PASSED" : "FAILED"));
-
-        System.out.println("[Test] Null Comparison: " + (!q.equals(null) ? "PASSED" : "FAILED"));
-
-        try {
-            new Quantity(1.0, null);
-        } catch (IllegalArgumentException e) {
-            System.out.println("[Test] Null Unit Rejected: PASSED");
-        }
+        compare(new QuantityLength(1.0, LengthUnit.YARDS), new QuantityLength(2.0, LengthUnit.FEET));
     }
 
-    private static void test(String name, Quantity q1, Quantity q2, boolean expected) {
+    private static void compare(QuantityLength q1, QuantityLength q2) {
         boolean result = q1.equals(q2);
-        String status = (result == expected) ? "PASSED" : "FAILED";
-        System.out.printf("[Test] %-35s | Input: %-15s vs %-15s | Result: %b | Status: %s%n",
-                name, q1, q2, result, status);
+        System.out.printf("Input: %s and %s | Output: Equal (%b)%n", q1, q2, result);
     }
 }
