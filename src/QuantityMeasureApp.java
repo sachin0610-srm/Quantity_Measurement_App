@@ -3,61 +3,28 @@ import java.util.Objects;
 public class QuantityMeasureApp {
 
     public static void main(String[] args) {
+        runAdditionExamples();
+    }
+
+    public static void runAdditionExamples() {
+        System.out.println("--- UC7: Addition with Target Unit Specification ---");
+
         try {
             QuantityLength l1 = new QuantityLength(1.0, LengthUnit.FEET);
             QuantityLength l2 = new QuantityLength(12.0, LengthUnit.INCHES);
-            QuantityLength result1 = l1.add(l2);
-            System.out.println("Result 1: " + result1);
+            System.out.println("Result (FEET):   " + QuantityLength.add(l1, l2, LengthUnit.FEET));
 
-            QuantityLength l3 = new QuantityLength(1.0, LengthUnit.YARDS);
-            QuantityLength l4 = new QuantityLength(3.0, LengthUnit.FEET);
-            QuantityLength result2 = l3.add(l4);
-            System.out.println("Result 2: " + result2);
+            System.out.println("Result (INCHES): " + QuantityLength.add(l1, l2, LengthUnit.INCHES));
+
+            System.out.println("Result (YARDS):  " + QuantityLength.add(l1, l2, LengthUnit.YARDS));
+
+            QuantityLength l3 = new QuantityLength(2.54, LengthUnit.CENTIMETERS);
+            QuantityLength l4 = new QuantityLength(1.0, LengthUnit.INCHES);
+            System.out.println("Result (CM):     " + QuantityLength.add(l3, l4, LengthUnit.CENTIMETERS));
 
         } catch (Exception e) {
-            e.printStackTrace();
+            System.err.println("Error: " + e.getMessage());
         }
-    }
-}
-
-class QuantityLength {
-    private final double value;
-    private final LengthUnit unit;
-
-    public QuantityLength(double value, LengthUnit unit) {
-        if (!Double.isFinite(value)) {
-            throw new IllegalArgumentException("Value must be a finite number.");
-        }
-        this.value = value;
-        this.unit = Objects.requireNonNull(unit, "Unit cannot be null.");
-    }
-
-    public QuantityLength add(QuantityLength other) {
-        Objects.requireNonNull(other, "Second operand cannot be null.");
-
-        double firstInBase = this.value * this.unit.conversionFactor;
-        double secondInBase = other.value * other.unit.conversionFactor;
-
-        double totalInBase = firstInBase + secondInBase;
-
-        double finalValue = totalInBase / this.unit.conversionFactor;
-
-        return new QuantityLength(finalValue, this.unit);
-    }
-
-    @Override
-    public String toString() {
-        return String.format("Quantity(%.2f, %s)", value, unit);
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        QuantityLength that = (QuantityLength) o;
-        // Use epsilon for floating point comparison
-        return Math.abs((that.value * that.unit.conversionFactor) -
-                (this.value * this.unit.conversionFactor)) < 1e-9;
     }
 }
 
@@ -69,7 +36,45 @@ enum LengthUnit {
 
     public final double conversionFactor;
 
-    LengthUnit(double conversionFactor) {
-        this.conversionFactor = conversionFactor;
+    LengthUnit(double factor) {
+        this.conversionFactor = factor;
+    }
+}
+
+class QuantityLength {
+    private final double value;
+    private final LengthUnit unit;
+
+    public QuantityLength(double value, LengthUnit unit) {
+        if (!Double.isFinite(value)) throw new IllegalArgumentException("Value must be finite.");
+        this.value = value;
+        this.unit = Objects.requireNonNull(unit, "Unit cannot be null.");
+    }
+
+    public static QuantityLength add(QuantityLength l1, QuantityLength l2, LengthUnit targetUnit) {
+        Objects.requireNonNull(l1, "First operand cannot be null.");
+        Objects.requireNonNull(l2, "Second operand cannot be null.");
+        Objects.requireNonNull(targetUnit, "Target unit cannot be null.");
+
+        double baseSum = (l1.value * l1.unit.conversionFactor) + (l2.value * l2.unit.conversionFactor);
+
+        double finalValue = baseSum / targetUnit.conversionFactor;
+
+        double roundedValue = Math.round(finalValue * 1000.0) / 1000.0;
+
+        return new QuantityLength(roundedValue, targetUnit);
+    }
+
+    @Override
+    public String toString() {
+        return value + " " + unit;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        QuantityLength that = (QuantityLength) o;
+        return Double.compare(that.value, value) == 0 && unit == that.unit;
     }
 }
