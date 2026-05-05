@@ -1,111 +1,115 @@
 import java.util.Objects;
-
-interface IMeasurable {
-    double convertToBaseUnit(double value);
-    double convertFromBaseUnit(double value);
-}
-
-enum LengthUnit implements IMeasurable {
-    FEET(12.0), INCHES(1.0);
-    private final double baseFactor;
-    LengthUnit(double baseFactor) { this.baseFactor = baseFactor; }
-    @Override public double convertToBaseUnit(double value) { return value * baseFactor; }
-    @Override public double convertFromBaseUnit(double value) { return value / baseFactor; }
-}
-
-enum WeightUnit implements IMeasurable {
-    KILOGRAM(1000.0), GRAM(1.0);
-    private final double baseFactor;
-    WeightUnit(double baseFactor) { this.baseFactor = baseFactor; }
-    @Override public double convertToBaseUnit(double value) { return value * baseFactor; }
-    @Override public double convertFromBaseUnit(double value) { return value / baseFactor; }
-}
-
-enum VolumeUnit implements IMeasurable {
-    LITRE(1000.0), MILLILITRE(1.0);
-    private final double baseFactor;
-    VolumeUnit(double baseFactor) { this.baseFactor = baseFactor; }
-    @Override public double convertToBaseUnit(double value) { return value * baseFactor; }
-    @Override public double convertFromBaseUnit(double value) { return value / baseFactor; }
-}
-
-class Quantity<U extends IMeasurable> {
-    private final double value;
-    private final U unit;
-
-    public Quantity(double value, U unit) {
-        this.value = value;
-        this.unit = unit;
-    }
-
-    public Quantity<U> subtract(Quantity<U> other) {
-        return subtract(other, this.unit);
-    }
-
-    public Quantity<U> subtract(Quantity<U> other, U targetUnit) {
-        validate(other);
-        if (targetUnit == null) throw new IllegalArgumentException("Target unit cannot be null");
-
-        double baseValue1 = this.unit.convertToBaseUnit(this.value);
-        double baseValue2 = other.unit.convertToBaseUnit(other.value);
-        double resultBase = baseValue1 - baseValue2;
-
-        double finalValue = Math.round(targetUnit.convertFromBaseUnit(resultBase) * 100.0) / 100.0;
-        return new Quantity<>(finalValue, targetUnit);
-    }
-
-    public double divide(Quantity<U> other) {
-        validate(other);
-        if (other.value == 0) throw new ArithmeticException("Division by zero");
-
-        double baseValue1 = this.unit.convertToBaseUnit(this.value);
-        double baseValue2 = other.unit.convertToBaseUnit(other.value);
-
-        return baseValue1 / baseValue2;
-    }
-
-    private void validate(Quantity<U> other) {
-        if (other == null) throw new IllegalArgumentException("Operand cannot be null");
-        if (!this.unit.getClass().equals(other.unit.getClass())) {
-            throw new IllegalArgumentException("Cross-category arithmetic is not allowed");
-        }
-    }
-
-    @Override
-    public String toString() { return "Quantity(" + value + ", " + unit + ")"; }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        Quantity<?> quantity = (Quantity<?>) o;
-        return Double.compare(quantity.value, value) == 0 && unit.equals(quantity.unit);
-    }
-}
+import java.util.function.DoubleBinaryOperator;
 
 public class QuantityMeasureApp {
-    public static void main(String[] args) {
-        try {
-            System.out.println("--- Subtraction (Implicit) ---");
-            System.out.println(new Quantity<>(10.0, LengthUnit.FEET).subtract(new Quantity<>(6.0, LengthUnit.INCHES)));
-            System.out.println(new Quantity<>(10.0, WeightUnit.KILOGRAM).subtract(new Quantity<>(5000.0, WeightUnit.GRAM)));
-            System.out.println(new Quantity<>(5.0, VolumeUnit.LITRE).subtract(new Quantity<>(500.0, VolumeUnit.MILLILITRE)));
 
-            System.out.println("\n--- Subtraction (Explicit) ---");
-            System.out.println(new Quantity<>(10.0, LengthUnit.FEET).subtract(new Quantity<>(6.0, LengthUnit.INCHES), LengthUnit.INCHES));
-            System.out.println(new Quantity<>(5.0, VolumeUnit.LITRE).subtract(new Quantity<>(2.0, VolumeUnit.LITRE), VolumeUnit.MILLILITRE));
+    interface IMeasurable {
+        double convertToBaseUnit(double value);
+        double convertFromBaseUnit(double value);
+    }
 
-            System.out.println("\n--- Subtraction (Negative/Zero) ---");
-            System.out.println(new Quantity<>(5.0, LengthUnit.FEET).subtract(new Quantity<>(10.0, LengthUnit.FEET)));
-            System.out.println(new Quantity<>(10.0, LengthUnit.FEET).subtract(new Quantity<>(120.0, LengthUnit.INCHES)));
+    public enum LengthUnit implements IMeasurable {
+        FEET(12.0), INCHES(1.0);
+        private final double factor;
+        LengthUnit(double factor) { this.factor = factor; }
+        @Override public double convertToBaseUnit(double v) { return v * factor; }
+        @Override public double convertFromBaseUnit(double v) { return v / factor; }
+    }
 
-            System.out.println("\n--- Division ---");
-            System.out.println(new Quantity<>(10.0, LengthUnit.FEET).divide(new Quantity<>(2.0, LengthUnit.FEET)));
-            System.out.println(new Quantity<>(24.0, LengthUnit.INCHES).divide(new Quantity<>(2.0, LengthUnit.FEET)));
-            System.out.println(new Quantity<>(2000.0, WeightUnit.GRAM).divide(new Quantity<>(1.0, WeightUnit.KILOGRAM)));
+    public enum WeightUnit implements IMeasurable {
+        KILOGRAM(1000.0), GRAM(1.0);
+        private final double factor;
+        WeightUnit(double factor) { this.factor = factor; }
+        @Override public double convertToBaseUnit(double v) { return v * factor; }
+        @Override public double convertFromBaseUnit(double v) { return v / factor; }
+    }
 
-        } catch (Exception e) {
-            System.err.println("Error: " + e.getMessage());
+    private enum ArithmeticOperation {
+        ADD((a, b) -> a + b),
+        SUBTRACT((a, b) -> a - b),
+        DIVIDE((a, b) -> {
+            if (b == 0) throw new ArithmeticException("Division by zero");
+            return a / b;
+        });
+
+        private final DoubleBinaryOperator operator;
+        ArithmeticOperation(DoubleBinaryOperator operator) { this.operator = operator; }
+        public double compute(double a, double b) { return operator.applyAsDouble(a, b); }
+    }
+
+    public static class Quantity<U extends Enum<U> & IMeasurable> {
+        private final double value;
+        private final U unit;
+
+        public Quantity(double value, U unit) {
+            this.value = value;
+            this.unit = unit;
         }
+
+        public Quantity<U> add(Quantity<U> other) {
+            return add(other, this.unit);
+        }
+
+        public Quantity<U> add(Quantity<U> other, U targetUnit) {
+            double resultBase = performBaseArithmetic(other, ArithmeticOperation.ADD, targetUnit);
+            return new Quantity<>(round(targetUnit.convertFromBaseUnit(resultBase)), targetUnit);
+        }
+
+        public Quantity<U> subtract(Quantity<U> other) {
+            return subtract(other, this.unit);
+        }
+
+        public Quantity<U> subtract(Quantity<U> other, U targetUnit) {
+            double resultBase = performBaseArithmetic(other, ArithmeticOperation.SUBTRACT, targetUnit);
+            return new Quantity<>(round(targetUnit.convertFromBaseUnit(resultBase)), targetUnit);
+        }
+
+        public Double divide(Quantity<U> other) {
+            return performBaseArithmetic(other, ArithmeticOperation.DIVIDE, null);
+        }
+
+        private void validateArithmeticOperands(Quantity<U> other, U targetUnit, boolean targetUnitRequired) {
+            if (other == null) throw new IllegalArgumentException("Operand cannot be null");
+            if (targetUnitRequired && targetUnit == null) throw new IllegalArgumentException("Target unit required");
+            if (!this.unit.getClass().equals(other.unit.getClass())) {
+                throw new IllegalArgumentException("Incompatible measurement categories");
+            }
+            if (!Double.isFinite(this.value) || !Double.isFinite(other.value)) {
+                throw new IllegalArgumentException("Values must be finite");
+            }
+        }
+
+        private double performBaseArithmetic(Quantity<U> other, ArithmeticOperation operation, U targetUnit) {
+            validateArithmeticOperands(other, targetUnit, operation != ArithmeticOperation.DIVIDE);
+            double base1 = this.unit.convertToBaseUnit(this.value);
+            double base2 = other.unit.convertToBaseUnit(other.value);
+            return operation.compute(base1, base2);
+        }
+
+        private double round(double v) { return Math.round(v * 100.0) / 100.0; }
+
+        @Override
+        public String toString() { return "Quantity(" + value + ", " + unit + ")"; }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            Quantity<?> quantity = (Quantity<?>) o;
+            return Double.compare(quantity.value, value) == 0 && Objects.equals(unit, quantity.unit);
+        }
+    }
+
+    public static void main(String[] args) {
+        Quantity<LengthUnit> feet = new Quantity<>(1.0, LengthUnit.FEET);
+        Quantity<LengthUnit> inches = new Quantity<>(12.0, LengthUnit.INCHES);
+
+        System.out.println(feet.add(inches));
+        System.out.println(feet.subtract(new Quantity<>(6.0, LengthUnit.INCHES)));
+        System.out.println(inches.divide(feet));
+
+        Quantity<WeightUnit> kg = new Quantity<>(10.0, WeightUnit.KILOGRAM);
+        Quantity<WeightUnit> g = new Quantity<>(5000.0, WeightUnit.GRAM);
+        System.out.println(kg.add(g, WeightUnit.GRAM));
     }
 }
