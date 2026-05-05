@@ -1,32 +1,5 @@
 import java.util.Objects;
 
-public class QuantityMeasureApp {
-
-    public static void main(String[] args) {
-        System.out.println("--- Length Operations (UC1–UC8) ---");
-        Quantity<LengthUnit> oneFoot = new Quantity<>(1.0, LengthUnit.FEET);
-        Quantity<LengthUnit> twelveInches = new Quantity<>(12.0, LengthUnit.INCHES);
-
-        demonstrateEquality(oneFoot, twelveInches, "1.0 Feet == 12.0 Inches");
-        System.out.println("Conversion: " + oneFoot.convertTo(LengthUnit.INCHES));
-        System.out.println("Addition (1ft + 12in): " + oneFoot.add(twelveInches, LengthUnit.FEET));
-
-        System.out.println("\n--- Weight Operations (UC9) ---");
-        Quantity<WeightUnit> oneKg = new Quantity<>(1.0, WeightUnit.KILOGRAM);
-        Quantity<WeightUnit> thousandGrams = new Quantity<>(1000.0, WeightUnit.GRAM);
-
-        demonstrateEquality(oneKg, thousandGrams, "1.0 KG == 1000.0 Grams");
-        System.out.println("Addition (1kg + 1000g): " + oneKg.add(thousandGrams, WeightUnit.KILOGRAM));
-
-        System.out.println("\n--- Cross-Category Prevention (UC10) ---");
-        System.out.println("Comparing 1.0 Feet to 1.0 KG -> " + oneFoot.equals(oneKg));
-    }
-
-    public static <U extends IMeasurable> void demonstrateEquality(Quantity<U> q1, Quantity<U> q2, String label) {
-        System.out.println(label + " -> Result: " + q1.equals(q2));
-    }
-}
-
 interface IMeasurable {
     double getConversionFactor();
     double convertToBaseUnit(double value);
@@ -34,47 +7,55 @@ interface IMeasurable {
     String getUnitName();
 }
 
-enum LengthUnit implements IMeasurable {
-    FEET(12.0), INCHES(1.0), YARDS(36.0), CENTIMETERS(0.4);
+enum VolumeUnit implements IMeasurable {
+    LITRE(1.0, "Litre"),
+    MILLILITRE(0.001, "Millilitre"),
+    GALLON(3.78541, "Gallon");
 
-    private final double factor;
-    LengthUnit(double factor) { this.factor = factor; }
+    private final double conversionFactor;
+    private final String unitName;
 
-    @Override public double getConversionFactor() { return factor; }
-    @Override public double convertToBaseUnit(double v) { return v * factor; }
-    @Override public double convertFromBaseUnit(double bv) { return bv / factor; }
-    @Override public String getUnitName() { return this.name(); }
-}
+    VolumeUnit(double conversionFactor, String unitName) {
+        this.conversionFactor = conversionFactor;
+        this.unitName = unitName;
+    }
 
-enum WeightUnit implements IMeasurable {
-    GRAM(1.0), KILOGRAM(1000.0), TONNE(1000000.0);
+    @Override
+    public double getConversionFactor() {
+        return conversionFactor;
+    }
 
-    private final double factor;
-    WeightUnit(double factor) { this.factor = factor; }
+    @Override
+    public double convertToBaseUnit(double value) {
+        return value * conversionFactor;
+    }
 
-    @Override public double getConversionFactor() { return factor; }
-    @Override public double convertToBaseUnit(double v) { return v * factor; }
-    @Override public double convertFromBaseUnit(double bv) { return bv / factor; }
-    @Override public String getUnitName() { return this.name(); }
+    @Override
+    public double convertFromBaseUnit(double baseValue) {
+        return baseValue / conversionFactor;
+    }
+
+    @Override
+    public String getUnitName() {
+        return unitName;
+    }
 }
 
 class Quantity<U extends IMeasurable> {
     private final double value;
     private final U unit;
+    private final double epsilon = 1e-6;
 
     public Quantity(double value, U unit) {
-        // Snippet 4.1: Constructor Validation
         if (unit == null) throw new IllegalArgumentException("Unit cannot be null");
-        if (!Double.isFinite(value)) throw new IllegalArgumentException("Value must be finite");
         this.value = value;
         this.unit = unit;
     }
 
     public Quantity<U> convertTo(U targetUnit) {
-        double baseValue = unit.convertToBaseUnit(this.value);
+        double baseValue = this.unit.convertToBaseUnit(this.value);
         double convertedValue = targetUnit.convertFromBaseUnit(baseValue);
-        double roundedValue = Math.round(convertedValue * 100.0) / 100.0;
-        return new Quantity<>(roundedValue, targetUnit);
+        return new Quantity<>(convertedValue, targetUnit);
     }
 
     public Quantity<U> add(Quantity<U> other) {
@@ -93,23 +74,52 @@ class Quantity<U extends IMeasurable> {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         Quantity<?> that = (Quantity<?>) o;
-
-        if (this.unit.getClass() != that.unit.getClass()) return false;
-
-        double v1 = this.unit.convertToBaseUnit(this.value);
-        double v2 = ((IMeasurable)that.unit).convertToBaseUnit(that.value);
-        return Double.compare(v1, v2) == 0;
+        if (!this.unit.getClass().equals(that.unit.getClass())) return false;
+        double val1 = this.unit.convertToBaseUnit(this.value);
+        double val2 = ((IMeasurable) that.unit).convertToBaseUnit(that.value);
+        return Math.abs(val1 - val2) < epsilon;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(unit.convertToBaseUnit(value), unit.getClass());
+        return Objects.hash(unit.convertToBaseUnit(value));
     }
 
     @Override
     public String toString() {
-        return String.format("Quantity(%.1f, %s)", value, unit.getUnitName());
+        if (unit == VolumeUnit.GALLON || unit == VolumeUnit.LITRE) {
+            return String.format("Quantity(~%.6f, %s)", value, unit.getUnitName().toUpperCase());
+        }
+        return String.format("Quantity(%.1f, %s)", value, unit.getUnitName().toUpperCase());
     }
+}
 
-    public double getValue() { return value; }
+public class QuantityMeasureApp {
+    public static void main(String[] args) {
+        System.out.println("Equality Comparisons:");
+        System.out.println("Input: new Quantity<>(1.0, LITRE).equals(new Quantity<>(1.0, LITRE)) -> Output: " +
+                new Quantity<>(1.0, VolumeUnit.LITRE).equals(new Quantity<>(1.0, VolumeUnit.LITRE)));
+        System.out.println("Input: new Quantity<>(1.0, LITRE).equals(new Quantity<>(1000.0, MILLILITRE)) -> Output: " +
+                new Quantity<>(1.0, VolumeUnit.LITRE).equals(new Quantity<>(1000.0, VolumeUnit.MILLILITRE)));
+        System.out.println("Input: new Quantity<>(1.0, GALLON).equals(new Quantity<>(1.0, GALLON)) -> Output: " +
+                new Quantity<>(1.0, VolumeUnit.GALLON).equals(new Quantity<>(1.0, VolumeUnit.GALLON)));
+        System.out.println("Input: new Quantity<>(1.0, LITRE).equals(new Quantity<>(0.264172, GALLON)) -> Output: " +
+                new Quantity<>(1.0, VolumeUnit.LITRE).equals(new Quantity<>(0.264172, VolumeUnit.GALLON)));
+
+        System.out.println("\nUnit Conversions:");
+        System.out.println("Input: new Quantity<>(1.0, LITRE).convertTo(MILLILITRE) -> Output: " +
+                new Quantity<>(1.0, VolumeUnit.LITRE).convertTo(VolumeUnit.MILLILITRE));
+        System.out.println("Input: new Quantity<>(2.0, GALLON).convertTo(LITRE) -> Output: " +
+                new Quantity<>(2.0, VolumeUnit.GALLON).convertTo(VolumeUnit.LITRE));
+
+        System.out.println("\nAddition Operations (Implicit):");
+        System.out.println("Input: 1.0L + 2.0L -> Output: " +
+                new Quantity<>(1.0, VolumeUnit.LITRE).add(new Quantity<>(2.0, VolumeUnit.LITRE)));
+        System.out.println("Input: 2.0 GAL + 3.78541L -> Output: " +
+                new Quantity<>(2.0, VolumeUnit.GALLON).add(new Quantity<>(3.78541, VolumeUnit.LITRE)));
+
+        System.out.println("\nAddition Operations (Explicit):");
+        System.out.println("Input: 1.0L + 1000.0mL (to mL) -> Output: " +
+                new Quantity<>(1.0, VolumeUnit.LITRE).add(new Quantity<>(1000.0, VolumeUnit.MILLILITRE), VolumeUnit.MILLILITRE));
+    }
 }
