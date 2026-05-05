@@ -1,125 +1,111 @@
 import java.util.Objects;
 
 interface IMeasurable {
-    double getConversionFactor();
     double convertToBaseUnit(double value);
-    double convertFromBaseUnit(double baseValue);
-    String getUnitName();
+    double convertFromBaseUnit(double value);
+}
+
+enum LengthUnit implements IMeasurable {
+    FEET(12.0), INCHES(1.0);
+    private final double baseFactor;
+    LengthUnit(double baseFactor) { this.baseFactor = baseFactor; }
+    @Override public double convertToBaseUnit(double value) { return value * baseFactor; }
+    @Override public double convertFromBaseUnit(double value) { return value / baseFactor; }
+}
+
+enum WeightUnit implements IMeasurable {
+    KILOGRAM(1000.0), GRAM(1.0);
+    private final double baseFactor;
+    WeightUnit(double baseFactor) { this.baseFactor = baseFactor; }
+    @Override public double convertToBaseUnit(double value) { return value * baseFactor; }
+    @Override public double convertFromBaseUnit(double value) { return value / baseFactor; }
 }
 
 enum VolumeUnit implements IMeasurable {
-    LITRE(1.0, "Litre"),
-    MILLILITRE(0.001, "Millilitre"),
-    GALLON(3.78541, "Gallon");
-
-    private final double conversionFactor;
-    private final String unitName;
-
-    VolumeUnit(double conversionFactor, String unitName) {
-        this.conversionFactor = conversionFactor;
-        this.unitName = unitName;
-    }
-
-    @Override
-    public double getConversionFactor() {
-        return conversionFactor;
-    }
-
-    @Override
-    public double convertToBaseUnit(double value) {
-        return value * conversionFactor;
-    }
-
-    @Override
-    public double convertFromBaseUnit(double baseValue) {
-        return baseValue / conversionFactor;
-    }
-
-    @Override
-    public String getUnitName() {
-        return unitName;
-    }
+    LITRE(1000.0), MILLILITRE(1.0);
+    private final double baseFactor;
+    VolumeUnit(double baseFactor) { this.baseFactor = baseFactor; }
+    @Override public double convertToBaseUnit(double value) { return value * baseFactor; }
+    @Override public double convertFromBaseUnit(double value) { return value / baseFactor; }
 }
 
 class Quantity<U extends IMeasurable> {
     private final double value;
     private final U unit;
-    private final double epsilon = 1e-6;
 
     public Quantity(double value, U unit) {
-        if (unit == null) throw new IllegalArgumentException("Unit cannot be null");
         this.value = value;
         this.unit = unit;
     }
 
-    public Quantity<U> convertTo(U targetUnit) {
-        double baseValue = this.unit.convertToBaseUnit(this.value);
-        double convertedValue = targetUnit.convertFromBaseUnit(baseValue);
-        return new Quantity<>(convertedValue, targetUnit);
+    public Quantity<U> subtract(Quantity<U> other) {
+        return subtract(other, this.unit);
     }
 
-    public Quantity<U> add(Quantity<U> other) {
-        return add(other, this.unit);
-    }
+    public Quantity<U> subtract(Quantity<U> other, U targetUnit) {
+        validate(other);
+        if (targetUnit == null) throw new IllegalArgumentException("Target unit cannot be null");
 
-    public Quantity<U> add(Quantity<U> other, U targetUnit) {
-        double sumInBase = this.unit.convertToBaseUnit(this.value) +
-                other.unit.convertToBaseUnit(other.value);
-        double finalValue = targetUnit.convertFromBaseUnit(sumInBase);
+        double baseValue1 = this.unit.convertToBaseUnit(this.value);
+        double baseValue2 = other.unit.convertToBaseUnit(other.value);
+        double resultBase = baseValue1 - baseValue2;
+
+        double finalValue = Math.round(targetUnit.convertFromBaseUnit(resultBase) * 100.0) / 100.0;
         return new Quantity<>(finalValue, targetUnit);
     }
+
+    public double divide(Quantity<U> other) {
+        validate(other);
+        if (other.value == 0) throw new ArithmeticException("Division by zero");
+
+        double baseValue1 = this.unit.convertToBaseUnit(this.value);
+        double baseValue2 = other.unit.convertToBaseUnit(other.value);
+
+        return baseValue1 / baseValue2;
+    }
+
+    private void validate(Quantity<U> other) {
+        if (other == null) throw new IllegalArgumentException("Operand cannot be null");
+        if (!this.unit.getClass().equals(other.unit.getClass())) {
+            throw new IllegalArgumentException("Cross-category arithmetic is not allowed");
+        }
+    }
+
+    @Override
+    public String toString() { return "Quantity(" + value + ", " + unit + ")"; }
 
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        Quantity<?> that = (Quantity<?>) o;
-        if (!this.unit.getClass().equals(that.unit.getClass())) return false;
-        double val1 = this.unit.convertToBaseUnit(this.value);
-        double val2 = ((IMeasurable) that.unit).convertToBaseUnit(that.value);
-        return Math.abs(val1 - val2) < epsilon;
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(unit.convertToBaseUnit(value));
-    }
-
-    @Override
-    public String toString() {
-        if (unit == VolumeUnit.GALLON || unit == VolumeUnit.LITRE) {
-            return String.format("Quantity(~%.6f, %s)", value, unit.getUnitName().toUpperCase());
-        }
-        return String.format("Quantity(%.1f, %s)", value, unit.getUnitName().toUpperCase());
+        Quantity<?> quantity = (Quantity<?>) o;
+        return Double.compare(quantity.value, value) == 0 && unit.equals(quantity.unit);
     }
 }
 
 public class QuantityMeasureApp {
     public static void main(String[] args) {
-        System.out.println("Equality Comparisons:");
-        System.out.println("Input: new Quantity<>(1.0, LITRE).equals(new Quantity<>(1.0, LITRE)) -> Output: " +
-                new Quantity<>(1.0, VolumeUnit.LITRE).equals(new Quantity<>(1.0, VolumeUnit.LITRE)));
-        System.out.println("Input: new Quantity<>(1.0, LITRE).equals(new Quantity<>(1000.0, MILLILITRE)) -> Output: " +
-                new Quantity<>(1.0, VolumeUnit.LITRE).equals(new Quantity<>(1000.0, VolumeUnit.MILLILITRE)));
-        System.out.println("Input: new Quantity<>(1.0, GALLON).equals(new Quantity<>(1.0, GALLON)) -> Output: " +
-                new Quantity<>(1.0, VolumeUnit.GALLON).equals(new Quantity<>(1.0, VolumeUnit.GALLON)));
-        System.out.println("Input: new Quantity<>(1.0, LITRE).equals(new Quantity<>(0.264172, GALLON)) -> Output: " +
-                new Quantity<>(1.0, VolumeUnit.LITRE).equals(new Quantity<>(0.264172, VolumeUnit.GALLON)));
+        try {
+            System.out.println("--- Subtraction (Implicit) ---");
+            System.out.println(new Quantity<>(10.0, LengthUnit.FEET).subtract(new Quantity<>(6.0, LengthUnit.INCHES)));
+            System.out.println(new Quantity<>(10.0, WeightUnit.KILOGRAM).subtract(new Quantity<>(5000.0, WeightUnit.GRAM)));
+            System.out.println(new Quantity<>(5.0, VolumeUnit.LITRE).subtract(new Quantity<>(500.0, VolumeUnit.MILLILITRE)));
 
-        System.out.println("\nUnit Conversions:");
-        System.out.println("Input: new Quantity<>(1.0, LITRE).convertTo(MILLILITRE) -> Output: " +
-                new Quantity<>(1.0, VolumeUnit.LITRE).convertTo(VolumeUnit.MILLILITRE));
-        System.out.println("Input: new Quantity<>(2.0, GALLON).convertTo(LITRE) -> Output: " +
-                new Quantity<>(2.0, VolumeUnit.GALLON).convertTo(VolumeUnit.LITRE));
+            System.out.println("\n--- Subtraction (Explicit) ---");
+            System.out.println(new Quantity<>(10.0, LengthUnit.FEET).subtract(new Quantity<>(6.0, LengthUnit.INCHES), LengthUnit.INCHES));
+            System.out.println(new Quantity<>(5.0, VolumeUnit.LITRE).subtract(new Quantity<>(2.0, VolumeUnit.LITRE), VolumeUnit.MILLILITRE));
 
-        System.out.println("\nAddition Operations (Implicit):");
-        System.out.println("Input: 1.0L + 2.0L -> Output: " +
-                new Quantity<>(1.0, VolumeUnit.LITRE).add(new Quantity<>(2.0, VolumeUnit.LITRE)));
-        System.out.println("Input: 2.0 GAL + 3.78541L -> Output: " +
-                new Quantity<>(2.0, VolumeUnit.GALLON).add(new Quantity<>(3.78541, VolumeUnit.LITRE)));
+            System.out.println("\n--- Subtraction (Negative/Zero) ---");
+            System.out.println(new Quantity<>(5.0, LengthUnit.FEET).subtract(new Quantity<>(10.0, LengthUnit.FEET)));
+            System.out.println(new Quantity<>(10.0, LengthUnit.FEET).subtract(new Quantity<>(120.0, LengthUnit.INCHES)));
 
-        System.out.println("\nAddition Operations (Explicit):");
-        System.out.println("Input: 1.0L + 1000.0mL (to mL) -> Output: " +
-                new Quantity<>(1.0, VolumeUnit.LITRE).add(new Quantity<>(1000.0, VolumeUnit.MILLILITRE), VolumeUnit.MILLILITRE));
+            System.out.println("\n--- Division ---");
+            System.out.println(new Quantity<>(10.0, LengthUnit.FEET).divide(new Quantity<>(2.0, LengthUnit.FEET)));
+            System.out.println(new Quantity<>(24.0, LengthUnit.INCHES).divide(new Quantity<>(2.0, LengthUnit.FEET)));
+            System.out.println(new Quantity<>(2000.0, WeightUnit.GRAM).divide(new Quantity<>(1.0, WeightUnit.KILOGRAM)));
+
+        } catch (Exception e) {
+            System.err.println("Error: " + e.getMessage());
+        }
     }
 }
