@@ -1,105 +1,125 @@
 import java.util.Objects;
 
+interface IMeasurable {
+    double getConversionFactor();
+    double convertToBaseUnit(double value);
+    double convertFromBaseUnit(double baseValue);
+    String getUnitName();
+}
+
+enum VolumeUnit implements IMeasurable {
+    LITRE(1.0, "Litre"),
+    MILLILITRE(0.001, "Millilitre"),
+    GALLON(3.78541, "Gallon");
+
+    private final double conversionFactor;
+    private final String unitName;
+
+    VolumeUnit(double conversionFactor, String unitName) {
+        this.conversionFactor = conversionFactor;
+        this.unitName = unitName;
+    }
+
+    @Override
+    public double getConversionFactor() {
+        return conversionFactor;
+    }
+
+    @Override
+    public double convertToBaseUnit(double value) {
+        return value * conversionFactor;
+    }
+
+    @Override
+    public double convertFromBaseUnit(double baseValue) {
+        return baseValue / conversionFactor;
+    }
+
+    @Override
+    public String getUnitName() {
+        return unitName;
+    }
+}
+
+class Quantity<U extends IMeasurable> {
+    private final double value;
+    private final U unit;
+    private final double epsilon = 1e-6;
+
+    public Quantity(double value, U unit) {
+        if (unit == null) throw new IllegalArgumentException("Unit cannot be null");
+        this.value = value;
+        this.unit = unit;
+    }
+
+    public Quantity<U> convertTo(U targetUnit) {
+        double baseValue = this.unit.convertToBaseUnit(this.value);
+        double convertedValue = targetUnit.convertFromBaseUnit(baseValue);
+        return new Quantity<>(convertedValue, targetUnit);
+    }
+
+    public Quantity<U> add(Quantity<U> other) {
+        return add(other, this.unit);
+    }
+
+    public Quantity<U> add(Quantity<U> other, U targetUnit) {
+        double sumInBase = this.unit.convertToBaseUnit(this.value) +
+                other.unit.convertToBaseUnit(other.value);
+        double finalValue = targetUnit.convertFromBaseUnit(sumInBase);
+        return new Quantity<>(finalValue, targetUnit);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Quantity<?> that = (Quantity<?>) o;
+        if (!this.unit.getClass().equals(that.unit.getClass())) return false;
+        double val1 = this.unit.convertToBaseUnit(this.value);
+        double val2 = ((IMeasurable) that.unit).convertToBaseUnit(that.value);
+        return Math.abs(val1 - val2) < epsilon;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(unit.convertToBaseUnit(value));
+    }
+
+    @Override
+    public String toString() {
+        if (unit == VolumeUnit.GALLON || unit == VolumeUnit.LITRE) {
+            return String.format("Quantity(~%.6f, %s)", value, unit.getUnitName().toUpperCase());
+        }
+        return String.format("Quantity(%.1f, %s)", value, unit.getUnitName().toUpperCase());
+    }
+}
+
 public class QuantityMeasureApp {
-
-    public enum WeightUnit {
-        KILOGRAM(1.0),
-        GRAM(0.001),
-        POUND(0.453592);
-
-        private final double conversionFactor;
-
-        WeightUnit(double conversionFactor) {
-            this.conversionFactor = conversionFactor;
-        }
-
-        public double convertToBaseUnit(double value) {
-            return value * conversionFactor;
-        }
-
-        public double convertFromBaseUnit(double baseValue) {
-            return baseValue / conversionFactor;
-        }
-    }
-
-    public static class QuantityWeight {
-        private final double value;
-        private final WeightUnit unit;
-        private static final double EPSILON = 1e-6;
-
-        public QuantityWeight(double value, WeightUnit unit) {
-            if (unit == null) {
-                throw new IllegalArgumentException("Unit cannot be null");
-            }
-            if (!Double.isFinite(value)) {
-                throw new IllegalArgumentException("Value must be a finite number");
-            }
-            this.value = value;
-            this.unit = unit;
-        }
-
-        public QuantityWeight convertTo(WeightUnit targetUnit) {
-            if (targetUnit == null) throw new IllegalArgumentException("Target unit cannot be null");
-            double baseValue = this.unit.convertToBaseUnit(this.value);
-            double convertedValue = targetUnit.convertFromBaseUnit(baseValue);
-            return new QuantityWeight(convertedValue, targetUnit);
-        }
-
-        public QuantityWeight add(QuantityWeight other) {
-            return add(this, other, this.unit);
-        }
-
-        public QuantityWeight add(QuantityWeight other, WeightUnit targetUnit) {
-            return add(this, other, targetUnit);
-        }
-
-        private static QuantityWeight add(QuantityWeight w1, QuantityWeight w2, WeightUnit targetUnit) {
-            double sumInBase = w1.unit.convertToBaseUnit(w1.value) + w2.unit.convertToBaseUnit(w2.value);
-            return new QuantityWeight(targetUnit.convertFromBaseUnit(sumInBase), targetUnit);
-        }
-
-        @Override
-        public boolean equals(Object obj) {
-            if (this == obj) return true;
-            if (obj == null || getClass() != obj.getClass()) return false; // Category Type Safety
-
-            QuantityWeight other = (QuantityWeight) obj;
-            double v1Base = this.unit.convertToBaseUnit(this.value);
-            double v2Base = other.unit.convertToBaseUnit(other.value);
-
-            return Math.abs(v1Base - v2Base) < EPSILON;
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(unit.convertToBaseUnit(value));
-        }
-
-        @Override
-        public String toString() {
-            return String.format("Quantity(%.3f, %s)", value, unit);
-        }
-    }
-
     public static void main(String[] args) {
-        System.out.println("--- Equality Comparisons ---");
-        QuantityWeight oneKg = new QuantityWeight(1.0, WeightUnit.KILOGRAM);
-        QuantityWeight thousandG = new QuantityWeight(1000.0, WeightUnit.GRAM);
-        System.out.println("1.0 kg == 1000.0 g: " + oneKg.equals(thousandG));
+        System.out.println("Equality Comparisons:");
+        System.out.println("Input: new Quantity<>(1.0, LITRE).equals(new Quantity<>(1.0, LITRE)) -> Output: " +
+                new Quantity<>(1.0, VolumeUnit.LITRE).equals(new Quantity<>(1.0, VolumeUnit.LITRE)));
+        System.out.println("Input: new Quantity<>(1.0, LITRE).equals(new Quantity<>(1000.0, MILLILITRE)) -> Output: " +
+                new Quantity<>(1.0, VolumeUnit.LITRE).equals(new Quantity<>(1000.0, VolumeUnit.MILLILITRE)));
+        System.out.println("Input: new Quantity<>(1.0, GALLON).equals(new Quantity<>(1.0, GALLON)) -> Output: " +
+                new Quantity<>(1.0, VolumeUnit.GALLON).equals(new Quantity<>(1.0, VolumeUnit.GALLON)));
+        System.out.println("Input: new Quantity<>(1.0, LITRE).equals(new Quantity<>(0.264172, GALLON)) -> Output: " +
+                new Quantity<>(1.0, VolumeUnit.LITRE).equals(new Quantity<>(0.264172, VolumeUnit.GALLON)));
 
-        QuantityWeight oneLb = new QuantityWeight(1.0, WeightUnit.POUND);
-        QuantityWeight standardG = new QuantityWeight(453.592, WeightUnit.GRAM);
-        System.out.println("1.0 lb == 453.592 g: " + oneLb.equals(standardG));
+        System.out.println("\nUnit Conversions:");
+        System.out.println("Input: new Quantity<>(1.0, LITRE).convertTo(MILLILITRE) -> Output: " +
+                new Quantity<>(1.0, VolumeUnit.LITRE).convertTo(VolumeUnit.MILLILITRE));
+        System.out.println("Input: new Quantity<>(2.0, GALLON).convertTo(LITRE) -> Output: " +
+                new Quantity<>(2.0, VolumeUnit.GALLON).convertTo(VolumeUnit.LITRE));
 
-        System.out.println("\n--- Unit Conversions ---");
-        QuantityWeight converted = oneKg.convertTo(WeightUnit.GRAM);
-        System.out.println("1.0 kg converted to GRAM: " + converted);
+        System.out.println("\nAddition Operations (Implicit):");
+        System.out.println("Input: 1.0L + 2.0L -> Output: " +
+                new Quantity<>(1.0, VolumeUnit.LITRE).add(new Quantity<>(2.0, VolumeUnit.LITRE)));
+        System.out.println("Input: 2.0 GAL + 3.78541L -> Output: " +
+                new Quantity<>(2.0, VolumeUnit.GALLON).add(new Quantity<>(3.78541, VolumeUnit.LITRE)));
 
-        System.out.println("\n--- Addition Operations ---");
-        QuantityWeight sum1 = oneKg.add(thousandG);
-        System.out.println("1.0 kg + 1000.0 g (default unit): " + sum1);
-
-        QuantityWeight sum2 = oneKg.add(thousandG, WeightUnit.GRAM);
-        System.out.println("1.0 kg + 1000.0 g (target GRAM): " + sum2);
+        System.out.println("\nAddition Operations (Explicit):");
+        System.out.println("Input: 1.0L + 1000.0mL (to mL) -> Output: " +
+                new Quantity<>(1.0, VolumeUnit.LITRE).add(new Quantity<>(1000.0, VolumeUnit.MILLILITRE), VolumeUnit.MILLILITRE));
     }
 }
